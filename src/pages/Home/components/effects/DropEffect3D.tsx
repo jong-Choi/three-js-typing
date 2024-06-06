@@ -11,6 +11,8 @@ const MENU_TEXT = "THREE.JS TUTORIAL";
 
 const DropEffect3D = () => {
   const mountRef = useRef<HTMLDivElement>(null);
+  const mouse = useRef({ x: 0, y: 0 });
+  const raycaster = useRef<THREE.Raycaster>();
   const lettersRef = useRef<Letter[]>([]);
   const worldRef = useRef<CANNON.World>();
   const animationRef = useRef<number>();
@@ -128,6 +130,50 @@ const DropEffect3D = () => {
       };
       animate();
     });
+
+    // 마우스 인터랙션
+    raycaster.current = new THREE.Raycaster();
+    const onMouseMove = (e: MouseEvent) => {
+      if (!raycaster.current) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      const mouseVec = new THREE.Vector2(mouse.current.x, mouse.current.y);
+      raycaster.current.setFromCamera(mouseVec, camera);
+      const intersects = raycaster.current.intersectObjects(
+        lettersRef.current.map((l) => l.mesh),
+      );
+      renderer.domElement.style.cursor = intersects.length > 0 ? "pointer" : "";
+    };
+    const onClick = () => {
+      if (!raycaster.current) return;
+      const mouseVec = new THREE.Vector2(mouse.current.x, mouse.current.y);
+      raycaster.current.setFromCamera(mouseVec, camera);
+      const intersects = raycaster.current.intersectObjects(
+        lettersRef.current.map((l) => l.mesh),
+      );
+      if (intersects.length > 0) {
+        const obj = intersects[0].object;
+        const letter = lettersRef.current.find((l) => l.mesh === obj);
+        if (letter) {
+          const impulse = new CANNON.Vec3(0, 0, -25);
+          letter.body.applyImpulse(impulse, new CANNON.Vec3());
+        }
+      }
+    };
+    renderer.domElement.addEventListener("mousemove", onMouseMove);
+    renderer.domElement.addEventListener("click", onClick);
+
+    // 리셋(글자 떨어지면 다시 올리기)
+    const reset = () => {
+      lettersRef.current.forEach((l) => {
+        l.body.position.set(l.init.x, l.init.y, l.init.z);
+        l.body.velocity.setZero();
+        l.body.angularVelocity.setZero();
+        l.body.quaternion.set(0, 0, 0, 1);
+      });
+    };
+    renderer.domElement.addEventListener("dblclick", reset);
 
     // 클린업
     return () => {

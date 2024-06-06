@@ -218,3 +218,114 @@ animate();
 
 `world.step(1 / 60)`은 1초에 60프레임 단위로 물리 시뮬레이션을 한 단계 진행한다.
 각 텍스트의 Cannon 바디에서 계산된 `position`과 `quaternion`(회전값)을 Three.js의 메쉬에 복사한다. 이로써 화면에 보이는 텍스트가 중력과 충돌에 따라 움직이는 것처럼 표현된다.
+
+## 마우스 인터렉션
+
+좋아. 지금 추가된 이 부분은 **사용자 인터랙션**에 관련된 핵심 로직이야.
+즉, **마우스를 움직이면 커서가 바뀌고**, **클릭하면 글자가 튕겨나가고**, **더블클릭하면 원래 위치로 리셋**되는 인터랙티브 기능을 담고 있어.
+
+아래는 해당 코드 부분만 **집중적으로 설명하는 튜토리얼**이다.
+
+## 마우스 인터랙션으로 글자와 상호작용하기
+
+Three.js의 `Raycaster`를 활용하면 화면 속 3D 객체와 마우스 포인터 간의 교차 여부를 계산할 수 있다. 이 기능을 통해 마우스를 움직일 때 커서를 변경하거나, 특정 객체를 클릭했을 때 반응하도록 만들 수 있다.
+
+클릭은 충격 주기, 더블 클릭은 초기화로 구현한다.
+
+### Raycaster 기본 설정
+
+```ts
+raycaster.current = new THREE.Raycaster();
+```
+
+`Raycaster`는 마우스 좌표를 기반으로 3D 공간에 "직선(ray)"을 쏘고, 해당 직선과 교차하는 Mesh 객체를 탐색할 수 있게 해주는 유틸리티이다.
+
+### 마우스 위치 추적 및 hover 처리
+
+```ts
+const onMouseMove = (e: MouseEvent) => {
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+```
+
+화면 상의 마우스 좌표(e.clientX, Y)를 \[-1, 1] 범위의 \*\*정규화된 디바이스 좌표(NDC)\*\*로 변환한다.
+이 변환은 `Raycaster`가 `setFromCamera()`를 사용할 때 요구하는 형태다.
+
+```ts
+const mouseVec = new THREE.Vector2(mouse.current.x, mouse.current.y);
+raycaster.current.setFromCamera(mouseVec, camera);
+```
+
+`setFromCamera()`는 현재 카메라를 기준으로 마우스 위치에서 직선을 발사할 준비를 한다.
+
+```ts
+const intersects = raycaster.current.intersectObjects(
+  lettersRef.current.map((l) => l.mesh),
+);
+```
+
+`intersectObjects()`는 주어진 3D 객체 리스트 중 실제로 이 직선과 교차하는 대상들을 반환한다.
+결과가 존재하면 그 중 가장 가까운 교차 객체가 `intersects[0]`이다.
+
+```ts
+renderer.domElement.style.cursor = intersects.length > 0 ? "pointer" : "";
+```
+
+하나라도 교차한 글자가 있다면 커서를 포인터로 바꿔서 "클릭 가능한 대상"임을 사용자에게 알려준다.
+
+### 클릭 시 impulse 적용
+
+```ts
+const onClick = () => {
+  const mouseVec = new THREE.Vector2(mouse.current.x, mouse.current.y);
+  raycaster.current.setFromCamera(mouseVec, camera);
+  const intersects = raycaster.current.intersectObjects(
+    lettersRef.current.map((l) => l.mesh),
+  );
+```
+
+마우스를 클릭했을 때도 마찬가지로 Raycaster를 통해 교차된 객체를 찾는다.
+
+```ts
+const obj = intersects[0].object;
+const letter = lettersRef.current.find((l) => l.mesh === obj);
+```
+
+화면에 보이는 `Mesh`를 기준으로, 해당 Mesh와 연결된 Cannon `Body`를 찾아낸다.
+
+```ts
+const impulse = new CANNON.Vec3(0, 0, -25);
+letter.body.applyImpulse(impulse, new CANNON.Vec3());
+```
+
+찾은 바디에 `applyImpulse()`를 호출해 순간적인 충격을 준다.
+첫 번째 인자는 충격의 벡터 방향이고, 두 번째 인자는 충격을 가할 위치이다. 여기서는 중심(0, 0, 0) 기준으로 -Z 방향으로 밀어낸다. 이 값은 실험적으로 조정할 수 있다.
+
+### 더블클릭 시 리셋
+
+```ts
+const reset = () => {
+  lettersRef.current.forEach((l) => {
+    l.body.position.set(l.init.x, l.init.y, l.init.z);
+    l.body.velocity.setZero();
+    l.body.angularVelocity.setZero();
+    l.body.quaternion.set(0, 0, 0, 1);
+  });
+};
+```
+
+글자가 아래로 떨어진 후 다시 원래 위치로 되돌리려면 초기 위치를 기억하고 있어야 한다.
+이때 `init`은 각 글자의 초기 좌표를 저장한 객체이고, 해당 위치로 `position`을 다시 설정한다.
+추가로 속도와 회전 속도도 모두 0으로 만들고, `quaternion`은 회전을 초기화한다.
+
+### 이벤트 연결
+
+```ts
+renderer.domElement.addEventListener("mousemove", onMouseMove);
+renderer.domElement.addEventListener("click", onClick);
+renderer.domElement.addEventListener("dblclick", reset);
+```
+
+이벤트 리스너는 Three.js가 붙인 canvas 엘리먼트 (`renderer.domElement`)에 직접 등록한다.
+React 컴포넌트의 DOM이 아니라 Three.js 내부에서 직접 다루기 때문에 `addEventListener`를 사용한다.
