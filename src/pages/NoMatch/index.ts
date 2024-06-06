@@ -1,3 +1,3 @@
-import NoMatch from "./ui/Page/Page";
+import NoMatch from "./components/NoMatchPage";
 
 export { NoMatch };
