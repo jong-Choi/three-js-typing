@@ -136,3 +136,85 @@ return () => {
 ```
 
 React의 `useEffect` 클린업 함수에서는 애니메이션을 중단하고 렌더러를 제거하며 DOM도 정리해준다.
+
+## Cannon.js로 물리효과 추가
+
+Cannon.js는 3D 물리 엔진이다. Three.js의 `Mesh`가 화면에 보여지는 역할이라면, Cannon.js의 `Body`는 충돌, 중력, 반사 같은 실제 물리 법칙을 처리하는 역할을 한다. 각 텍스트는 Three.js의 `Mesh`와 Cannon.js의 `Body`로 동시에 생성되고, 매 프레임마다 `Body`의 위치와 회전 값을 `Mesh`에 복사해 동기화한다.
+
+### 물리 월드 생성
+
+```ts
+const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -50, 0) });
+worldRef.current = world;
+```
+
+`World`는 Cannon에서 물리 시뮬레이션이 이루어지는 공간이다. `gravity`는 중력을 의미하며, Y축 방향으로 -50의 중력을 설정했다.
+
+### 바닥 생성
+
+```ts
+const ground = new CANNON.Body({
+  mass: 0,
+  shape: new CANNON.Box(new CANNON.Vec3(50, 0.5, 50)),
+  position: new CANNON.Vec3(0, -10, 0),
+});
+world.addBody(ground);
+```
+
+`Body`는 물리 시뮬레이션 대상 객체를 뜻한다. `mass`가 0인 바디는 고정(static body)으로, 움직이지 않는 바닥이나 벽 등에 사용된다. `CANNON.Box`는 직육면체 형태의 충돌체를 정의하며, 여기서는 100x1x100 크기의 바닥이다.
+
+바닥은 Cannon에서는 `Body`로, Three.js에서는 `Mesh`로 각각 만들어진 뒤 동일한 위치에 배치된다. 단, Three.js에서의 시각적 표현은 직접 동기화하지 않기 때문에 따로 움직일 필요는 없다.
+
+### 텍스트 하나당 Mesh와 Body 생성
+
+폰트 로딩 후 TextGeometry를 만든 후, Cannon에서 사용할 수 있도록 충돌 범위를 계산한다.
+
+```ts
+geometry.computeBoundingBox();
+const box = geometry.boundingBox;
+const sx = (box.max.x - box.min.x) / 2;
+const sy = (box.max.y - box.min.y) / 2;
+const sz = (box.max.z - box.min.z) / 2;
+const shape = new CANNON.Box(new CANNON.Vec3(sx, sy, sz));
+```
+
+`TextGeometry`는 3D 텍스트를 벡터 형태로 생성해준다. 하지만 이 자체는 물리적인 의미가 없기 때문에, `computeBoundingBox()`로 경계값을 계산한 후 해당 크기를 기반으로 Cannon용 Box 충돌체를 만든다.
+
+```ts
+const body = new CANNON.Body({
+  mass: 1,
+  position: new CANNON.Vec3(...),
+  shape,
+  angularDamping: 0.99,
+});
+```
+
+`mass`는 질량을 의미한다. 1 이상이면 중력의 영향을 받는다. `angularDamping`은 회전 감쇠 값으로, 0이면 계속 회전하고 1에 가까울수록 빠르게 멈춘다.
+
+텍스트 메쉬와 바디는 다음처럼 묶어서 저장된다.
+
+```ts
+letters.push({
+  mesh,
+  body,
+  init: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
+});
+```
+
+### 물리 시뮬레이션과 렌더링 동기화
+
+```ts
+const animate = () => {
+  world.step(1 / 60);
+  letters.forEach(({ mesh, body }) => {
+    mesh.position.copy(body.position as THREE.Vector3);
+    mesh.quaternion.copy(body.quaternion as THREE.Quaternion);
+  });
+  renderer.render(scene, camera);
+  animationRef.current = requestAnimationFrame(animate);
+};
+animate();
+```
+
+`world.step(1 / 60)`은 1초에 60프레임 단위로 물리 시뮬레이션을 한 단계 진행한다.
+각 텍스트의 Cannon 바디에서 계산된 `position`과 `quaternion`(회전값)을 Three.js의 메쉬에 복사한다. 이로써 화면에 보이는 텍스트가 중력과 충돌에 따라 움직이는 것처럼 표현된다.
