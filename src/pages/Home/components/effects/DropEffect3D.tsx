@@ -7,9 +7,8 @@ import { Letter } from "../../types/letter";
 
 const FONT_URL =
   "https://cdn.jsdelivr.net/npm/three@0.150.1/examples/fonts/helvetiker_regular.typeface.json";
-const MENU_TEXT = "THREE.JS TUTORIAL";
 
-const DropEffect3D = () => {
+const DropEffect3D = ({ text = "TYPING" }: { text?: string }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const raycaster = useRef<THREE.Raycaster>();
   const lettersRef = useRef<Letter[]>([]);
@@ -89,10 +88,10 @@ const DropEffect3D = () => {
       const group = new THREE.Group();
       const colorSet = pick(COLORS);
       const letters: Letter[] = [];
-      const offsetX = -((MENU_TEXT.length - 1) * 3 * 1.2) / 2;
-      for (let i = 0; i < MENU_TEXT.length; i++) {
-        const letter = MENU_TEXT[i];
-        const progress = i / (MENU_TEXT.length - 1);
+      const offsetX = -((text.length - 1) * 3 * 1.2) / 2;
+      for (let i = 0; i < text.length; i++) {
+        const letter = text[i];
+        const progress = i / (text.length - 1);
         const material = new THREE.MeshPhongMaterial({
           color: colorSet.from.clone().lerp(colorSet.to, progress),
           shininess: 80,
@@ -260,7 +259,7 @@ const DropEffect3D = () => {
         mountNode.removeChild(renderer.domElement);
       }
     };
-  }, [mountRef]);
+  }, [mountRef, text]);
 
   return <div ref={mountRef} style={{ width: 1200, height: 800 }} />;
 };
