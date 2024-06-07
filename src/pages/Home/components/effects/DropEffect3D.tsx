@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { FontLoader, TextGeometry } from "three-stdlib";
+import { FontLoader, TextGeometry, OrbitControls } from "three-stdlib";
 import * as CANNON from "cannon-es";
 import { COLORS, pick } from "../../utils/colorUtils";
 import { Letter } from "../../types/letter";
@@ -11,12 +11,14 @@ const MENU_TEXT = "THREE.JS TUTORIAL";
 
 const DropEffect3D = () => {
   const mountRef = useRef<HTMLDivElement>(null);
-  const mouse = useRef({ x: 0, y: 0 });
   const raycaster = useRef<THREE.Raycaster>();
   const lettersRef = useRef<Letter[]>([]);
   const worldRef = useRef<CANNON.World>();
   const animationRef = useRef<number>();
   const groundRef = useRef<CANNON.Body>();
+  const controlsRef = useRef<OrbitControls>();
+  const dragState = useRef({ isDragging: false, start: { x: 0, y: 0 } });
+  const isDraggingRef = useRef(false);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -35,13 +37,21 @@ const DropEffect3D = () => {
     scene.add(backLight);
 
     const camera = new THREE.OrthographicCamera(-40, 40, 30, -30, -10, 100);
-    camera.position.set(-20, 20, 20);
+    camera.position.set(-15, 15, 40);
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(1200, 800);
     renderer.setPixelRatio(window.devicePixelRatio);
     mountNode.appendChild(renderer.domElement);
+
+    // 드래그 카메라 컨트롤
+    controlsRef.current = new OrbitControls(camera, renderer.domElement);
+    controlsRef.current.enableDamping = true;
+    controlsRef.current.enableZoom = false;
+    controlsRef.current.enablePan = false;
+    controlsRef.current.enabled = true;
+    const controls = controlsRef.current;
 
     // Cannon.js 월드
     const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -50, 0) });
@@ -136,21 +146,79 @@ const DropEffect3D = () => {
 
     // 마우스 인터랙션
     raycaster.current = new THREE.Raycaster();
+
+    const getMouseVec = (e: MouseEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      return new THREE.Vector2(x, y);
+    };
+
     const onMouseMove = (e: MouseEvent) => {
       if (!raycaster.current) return;
-      const rect = renderer.domElement.getBoundingClientRect();
-      mouse.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      const mouseVec = new THREE.Vector2(mouse.current.x, mouse.current.y);
+      const mouseVec = getMouseVec(e);
       raycaster.current.setFromCamera(mouseVec, camera);
       const intersects = raycaster.current.intersectObjects(
         lettersRef.current.map((l) => l.mesh),
       );
-      renderer.domElement.style.cursor = intersects.length > 0 ? "pointer" : "";
+      if (intersects.length > 0) {
+        renderer.domElement.style.cursor = "pointer";
+      } else {
+        renderer.domElement.style.cursor = isDraggingRef.current
+          ? "grabbing"
+          : "grab";
+      }
     };
-    const onClick = () => {
+    const onMouseDown = (e: MouseEvent) => {
       if (!raycaster.current) return;
-      const mouseVec = new THREE.Vector2(mouse.current.x, mouse.current.y);
+
+      dragState.current.isDragging = false;
+      dragState.current.start = { x: e.clientX, y: e.clientY };
+      // 글자 hit test
+      const mouseVec = getMouseVec(e);
+      raycaster.current.setFromCamera(mouseVec, camera);
+      const intersects = raycaster.current.intersectObjects(
+        lettersRef.current.map((l) => l.mesh),
+      );
+      if (intersects.length > 0) {
+        controls.enabled = false;
+        const obj = intersects[0].object;
+        const letter = lettersRef.current.find((l) => l.mesh === obj);
+        if (letter) {
+          const impulse = new CANNON.Vec3(0, 0, -25);
+          letter.body.applyImpulse(impulse, new CANNON.Vec3());
+        }
+        // OrbitControls의 pointerdown 이벤트를 막음
+        e.preventDefault();
+        e.stopPropagation();
+        setTimeout(() => {
+          controls.enabled = true;
+        }, 0); // 다음 프레임에 다시 활성화
+      } else {
+        // 글자 아닌 곳: OrbitControls가 정상 동작
+        isDraggingRef.current = true;
+        renderer.domElement.style.cursor = "grabbing";
+      }
+    };
+    const onMouseUp = (e: MouseEvent) => {
+      if (!raycaster.current) return;
+      isDraggingRef.current = false;
+      // 항상 활성화 유지
+      // 마우스가 올라간 위치에 따라 커서 업데이트
+      const mouseVec = getMouseVec(e);
+      raycaster.current.setFromCamera(mouseVec, camera);
+      const intersects = raycaster.current.intersectObjects(
+        lettersRef.current.map((l) => l.mesh),
+      );
+      if (intersects.length > 0) {
+        renderer.domElement.style.cursor = "pointer";
+      } else {
+        renderer.domElement.style.cursor = "grab";
+      }
+    };
+    const onClick = (e: MouseEvent) => {
+      if (!raycaster.current) return;
+      const mouseVec = getMouseVec(e);
       raycaster.current.setFromCamera(mouseVec, camera);
       const intersects = raycaster.current.intersectObjects(
         lettersRef.current.map((l) => l.mesh),
@@ -179,6 +247,12 @@ const DropEffect3D = () => {
     renderer.domElement.addEventListener("dblclick", reset);
 
     // 클린업
+    renderer.domElement.addEventListener("mousedown", onMouseDown);
+    renderer.domElement.addEventListener("mousemove", onMouseMove);
+    renderer.domElement.addEventListener("mouseup", onMouseUp);
+    renderer.domElement.addEventListener("mouseleave", () => {
+      controls.enabled = false;
+    });
     return () => {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
       renderer.dispose();
