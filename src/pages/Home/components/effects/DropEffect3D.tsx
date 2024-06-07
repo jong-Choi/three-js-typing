@@ -23,7 +23,17 @@ const DropEffect3D = () => {
     const mountNode = mountRef.current;
     // Three.js 기본 세팅
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x202533);
+    // 배경색
+    scene.background = new THREE.Color(0x23263a);
+    // Light
+    scene.add(new THREE.AmbientLight(0xcccccc, 1.4));
+    const foreLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    foreLight.position.set(5, 5, 20);
+    scene.add(foreLight);
+    const backLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    backLight.position.set(-5, -5, -10);
+    scene.add(backLight);
+
     const camera = new THREE.OrthographicCamera(-20, 20, 15, -15, -10, 100);
     camera.position.set(-10, 10, 10);
     camera.lookAt(0, 0, 0);
@@ -32,15 +42,6 @@ const DropEffect3D = () => {
     renderer.setSize(600, 400);
     renderer.setPixelRatio(window.devicePixelRatio);
     mountNode.appendChild(renderer.domElement);
-
-    // Light
-    scene.add(new THREE.AmbientLight(0xcccccc));
-    const foreLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    foreLight.position.set(5, 5, 20);
-    scene.add(foreLight);
-    const backLight = new THREE.DirectionalLight(0xffffff, 1);
-    backLight.position.set(-5, -5, -10);
-    scene.add(backLight);
 
     // Cannon.js 월드
     const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -50, 0) });
@@ -84,6 +85,8 @@ const DropEffect3D = () => {
         const progress = i / (MENU_TEXT.length - 1);
         const material = new THREE.MeshPhongMaterial({
           color: colorSet.from.clone().lerp(colorSet.to, progress),
+          shininess: 80,
+          specular: 0xffffff,
         });
         const geometry = new TextGeometry(letter, options);
         geometry.computeBoundingBox();
