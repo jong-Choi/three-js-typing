@@ -24,7 +24,7 @@ const DropEffect3D = () => {
     // Three.js 기본 세팅
     const scene = new THREE.Scene();
     // 배경색
-    scene.background = new THREE.Color(0x23263a);
+    scene.background = new THREE.Color(0x353942);
     // Light
     scene.add(new THREE.AmbientLight(0xcccccc, 1.4));
     const foreLight = new THREE.DirectionalLight(0xffffff, 0.8);
