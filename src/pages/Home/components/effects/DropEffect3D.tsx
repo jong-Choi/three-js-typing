@@ -34,12 +34,12 @@ const DropEffect3D = () => {
     backLight.position.set(-5, -5, -10);
     scene.add(backLight);
 
-    const camera = new THREE.OrthographicCamera(-20, 20, 15, -15, -10, 100);
-    camera.position.set(-10, 10, 10);
+    const camera = new THREE.OrthographicCamera(-40, 40, 30, -30, -10, 100);
+    camera.position.set(-20, 20, 20);
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(600, 400);
+    renderer.setSize(1200, 800);
     renderer.setPixelRatio(window.devicePixelRatio);
     mountNode.appendChild(renderer.domElement);
 
@@ -57,7 +57,7 @@ const DropEffect3D = () => {
     groundRef.current = ground;
     const groundMesh = new THREE.Mesh(
       new THREE.BoxGeometry(100, 1, 100),
-      new THREE.MeshPhongMaterial({ color: 0x222222 }),
+      new THREE.MeshPhongMaterial({ color: 0x353942 }),
     );
     groundMesh.position.y = -10;
     scene.add(groundMesh);
@@ -188,7 +188,7 @@ const DropEffect3D = () => {
     };
   }, [mountRef]);
 
-  return <div ref={mountRef} style={{ width: 600, height: 400 }} />;
+  return <div ref={mountRef} style={{ width: 1200, height: 800 }} />;
 };
 
 export default DropEffect3D;
