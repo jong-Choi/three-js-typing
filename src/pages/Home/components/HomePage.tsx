@@ -25,7 +25,6 @@ export default function HomePage(): React.ReactNode {
           <h1 className="mb-2 text-4xl font-bold">3D 타자 연습</h1>
           <TypingPractice
             currentText={currentText}
-            onComplete={handleComplete}
             setCurrentIdx={setCurrentIdx}
           />
           <div className="mb-4 flex gap-2"></div>

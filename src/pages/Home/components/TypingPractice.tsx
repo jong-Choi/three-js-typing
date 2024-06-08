@@ -3,19 +3,19 @@ import { useTypingImpulse } from "../context/hooks";
 
 interface TypingPracticeProps {
   currentText: string;
-  onComplete: () => void;
   setCurrentIdx: React.Dispatch<React.SetStateAction<number>>;
 }
 
 export default function TypingPractice({
   currentText,
-  onComplete,
   setCurrentIdx,
 }: TypingPracticeProps) {
   const [input, setInput] = useState("");
+  const [isSolved, setIsSolved] = useState(false);
   const { triggerImpulse } = useTypingImpulse();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isSolved) return; // 정답 입력 시 입력 금지
     const value = e.target.value.toUpperCase();
     // 마지막 입력 글자 인덱스
     const idx = value.length - 1;
@@ -41,16 +41,18 @@ export default function TypingPractice({
     setInput(value);
   };
 
+  // 정답 입력 시 다음 문장으로
   useEffect(() => {
-    if (input === currentText) {
-      // 전체 단어 맞춤: 모든 글자에 강한 임펄스
+    if (input === currentText && !isSolved) {
+      setIsSolved(true);
       triggerImpulse({ type: "word", strength: 80, ts: Date.now() });
       setTimeout(() => {
         setInput("");
         setCurrentIdx((idx) => idx + 1);
+        setIsSolved(false);
       }, 400);
     }
-  }, [input, currentText, triggerImpulse, setCurrentIdx]);
+  }, [input, currentText, isSolved, triggerImpulse, setCurrentIdx]);
 
   return (
     <div className="mb-2 flex flex-col items-center">
