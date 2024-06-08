@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { FontLoader, TextGeometry, OrbitControls } from "three-stdlib";
 import * as CANNON from "cannon-es";
@@ -11,24 +11,19 @@ const FONT_URL =
 
 const DropEffect3D = ({ history }: { history: string[] }) => {
   const mountRef = useRef<HTMLDivElement>(null);
-  const raycaster = useRef<THREE.Raycaster>();
-  const lettersRef = useRef<Letter[]>([]);
+  const lettersRef = useRef<Letter[]>([]); // 누적된 모든 글자
   const worldRef = useRef<CANNON.World>();
   const sceneRef = useRef<THREE.Scene>();
   const groupRef = useRef<THREE.Group>();
   const animationRef = useRef<number>();
   const groundRef = useRef<CANNON.Body>();
   const controlsRef = useRef<OrbitControls>();
-  const dragState = useRef({ isDragging: false, start: { x: 0, y: 0 } });
-  const isDraggingRef = useRef(false);
   const rendererRef = useRef<THREE.WebGLRenderer>();
   const cameraRef = useRef<THREE.OrthographicCamera>();
   const { impulse } = useTypingImpulse();
 
   // 최초 1회: 씬/월드/바닥/애니메이션 루프 생성
   useEffect(() => {
-    if (!mountRef.current) return;
-    const mountNode = mountRef.current;
     // 씬
     const scene = new THREE.Scene();
     sceneRef.current = scene;
@@ -50,6 +45,8 @@ const DropEffect3D = ({ history }: { history: string[] }) => {
     renderer.setSize(1200, 800);
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setClearColor("#353942");
+    const mountNode = mountRef.current;
+    if (!mountNode) return;
     mountNode.appendChild(renderer.domElement);
     rendererRef.current = renderer;
     // OrbitControls
@@ -58,20 +55,19 @@ const DropEffect3D = ({ history }: { history: string[] }) => {
     controlsRef.current.enableZoom = false;
     controlsRef.current.enablePan = false;
     controlsRef.current.enabled = true;
-    const controls = controlsRef.current;
     // Cannon.js 월드
     const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -50, 0) });
     worldRef.current = world;
     // 바닥
     const ground = new CANNON.Body({
       mass: 0,
-      shape: new CANNON.Box(new CANNON.Vec3(100, 0.5, 100)),
+      shape: new CANNON.Box(new CANNON.Vec3(200, 0.5, 200)), // 기존 100 → 200
       position: new CANNON.Vec3(0, -10, 0),
     });
     world.addBody(ground);
     groundRef.current = ground;
     const groundMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(200, 1, 200),
+      new THREE.BoxGeometry(400, 1, 400), // 기존 200 → 400
       new THREE.MeshPhongMaterial({ color: 0x353942 }),
     );
     groundMesh.position.y = -10;
@@ -82,133 +78,34 @@ const DropEffect3D = ({ history }: { history: string[] }) => {
     scene.add(group);
     // 애니메이션 루프
     const animate = () => {
-      if (!sceneRef.current || !cameraRef.current) return;
       world.step(1 / 60);
       controlsRef.current?.update();
+      // 화면 밖으로 떨어진 글자 제거
+      lettersRef.current = lettersRef.current.filter(({ mesh, body }) => {
+        if (body.position.y < -100) {
+          scene.remove(mesh);
+          world.removeBody(body);
+          if (!window.__disappearedCount) {
+            window.__disappearedCount = 0;
+          }
+          window.__disappearedCount += 1;
+          return false;
+        }
+        return true;
+      });
       lettersRef.current.forEach(({ mesh, body }) => {
         mesh.position.copy(body.position as unknown as THREE.Vector3);
         mesh.quaternion.copy(body.quaternion as unknown as THREE.Quaternion);
       });
-      rendererRef.current?.render(sceneRef.current, cameraRef.current);
+      renderer.render(scene, camera);
       animationRef.current = requestAnimationFrame(animate);
     };
     animate();
-
-    // 마우스 인터랙션
-    raycaster.current = new THREE.Raycaster();
-
-    const getMouseVec = (e: MouseEvent) => {
-      const rect = renderer.domElement.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      return new THREE.Vector2(x, y);
-    };
-
-    const onMouseMove = (e: MouseEvent) => {
-      if (!raycaster.current) return;
-      const mouseVec = getMouseVec(e);
-      raycaster.current.setFromCamera(mouseVec, camera);
-      const intersects = raycaster.current.intersectObjects(
-        lettersRef.current.map((l) => l.mesh),
-      );
-      if (intersects.length > 0) {
-        renderer.domElement.style.cursor = "pointer";
-      } else {
-        renderer.domElement.style.cursor = isDraggingRef.current
-          ? "grabbing"
-          : "grab";
-      }
-    };
-    const onMouseDown = (e: MouseEvent) => {
-      if (!raycaster.current) return;
-
-      dragState.current.isDragging = false;
-      dragState.current.start = { x: e.clientX, y: e.clientY };
-      // 글자 hit test
-      const mouseVec = getMouseVec(e);
-      raycaster.current.setFromCamera(mouseVec, camera);
-      const intersects = raycaster.current.intersectObjects(
-        lettersRef.current.map((l) => l.mesh),
-      );
-      if (intersects.length > 0) {
-        controls.enabled = false;
-        const obj = intersects[0].object;
-        const letter = lettersRef.current.find((l) => l.mesh === obj);
-        if (letter) {
-          const impulse = new CANNON.Vec3(0, 0, -25);
-          letter.body.applyImpulse(impulse, new CANNON.Vec3());
-        }
-        // OrbitControls의 pointerdown 이벤트를 막음
-        e.preventDefault();
-        e.stopPropagation();
-        setTimeout(() => {
-          controls.enabled = true;
-        }, 0); // 다음 프레임에 다시 활성화
-      } else {
-        // 글자 아닌 곳: OrbitControls가 정상 동작
-        isDraggingRef.current = true;
-        renderer.domElement.style.cursor = "grabbing";
-      }
-    };
-    const onMouseUp = (e: MouseEvent) => {
-      if (!raycaster.current) return;
-      isDraggingRef.current = false;
-      // 항상 활성화 유지
-      // 마우스가 올라간 위치에 따라 커서 업데이트
-      const mouseVec = getMouseVec(e);
-      raycaster.current.setFromCamera(mouseVec, camera);
-      const intersects = raycaster.current.intersectObjects(
-        lettersRef.current.map((l) => l.mesh),
-      );
-      if (intersects.length > 0) {
-        renderer.domElement.style.cursor = "pointer";
-      } else {
-        renderer.domElement.style.cursor = "grab";
-      }
-    };
-    const onClick = (e: MouseEvent) => {
-      if (!raycaster.current) return;
-      const mouseVec = getMouseVec(e);
-      raycaster.current.setFromCamera(mouseVec, camera);
-      const intersects = raycaster.current.intersectObjects(
-        lettersRef.current.map((l) => l.mesh),
-      );
-      if (intersects.length > 0) {
-        const obj = intersects[0].object;
-        const letter = lettersRef.current.find((l) => l.mesh === obj);
-        if (letter) {
-          const impulse = new CANNON.Vec3(0, 0, -25);
-          letter.body.applyImpulse(impulse, new CANNON.Vec3());
-        }
-      }
-    };
-    renderer.domElement.addEventListener("mousemove", onMouseMove);
-    renderer.domElement.addEventListener("click", onClick);
-
-    // 리셋(글자 떨어지면 다시 올리기)
-    const reset = () => {
-      lettersRef.current.forEach((l) => {
-        l.body.position.set(l.init.x, l.init.y, l.init.z);
-        l.body.velocity.setZero();
-        l.body.angularVelocity.setZero();
-        l.body.quaternion.set(0, 0, 0, 1);
-      });
-    };
-    renderer.domElement.addEventListener("dblclick", reset);
-
     // 클린업
-    renderer.domElement.addEventListener("mousedown", onMouseDown);
-    renderer.domElement.addEventListener("mousemove", onMouseMove);
-    renderer.domElement.addEventListener("mouseup", onMouseUp);
-    renderer.domElement.addEventListener("mouseleave", () => {
-      controls.enabled = false;
-    });
     return () => {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
       renderer.dispose();
-      if (mountNode) {
-        mountNode.removeChild(renderer.domElement);
-      }
+      mountNode.removeChild(renderer.domElement);
     };
   }, []);
 
@@ -217,8 +114,6 @@ const DropEffect3D = ({ history }: { history: string[] }) => {
     if (!sceneRef.current || !groupRef.current || !worldRef.current) return;
     // history의 각 단어를 누적해서, 이미 추가된 글자 수보다 많은 경우만 추가
     let letterCount = lettersRef.current.length;
-    const group = groupRef.current;
-    const world = worldRef.current;
     for (let h = 0; h < history.length; h++) {
       const text = history[h];
       for (let i = 0; i < text.length; i++) {
@@ -249,8 +144,6 @@ const DropEffect3D = ({ history }: { history: string[] }) => {
           const progress = i / (text.length - 1);
           const material = new THREE.MeshPhongMaterial({
             color: colorSet.from.clone().lerp(colorSet.to, progress),
-            shininess: 80,
-            specular: 0xffffff,
           });
           const geometry = new TextGeometry(text[i], options);
           geometry.computeBoundingBox();
@@ -259,6 +152,8 @@ const DropEffect3D = ({ history }: { history: string[] }) => {
           // 위치: 단어별로 y축을 다르게, x축은 단어 내에서만 오프셋
           const offsetX = -((text.length - 1) * 3 * 1.2) / 2;
           mesh.position.set(offsetX + i * 3 * 1.2, 5 + h * 5, 0); // y축 h*5로 쌓임
+          const group = groupRef.current;
+          if (!group) return;
           group.add(mesh);
           // Cannon body
           const box = geometry.boundingBox;
@@ -277,6 +172,8 @@ const DropEffect3D = ({ history }: { history: string[] }) => {
             shape,
             angularDamping: 0.99,
           });
+          const world = worldRef.current;
+          if (!world) return;
           world.addBody(body);
           lettersRef.current.push({
             mesh,
@@ -286,6 +183,8 @@ const DropEffect3D = ({ history }: { history: string[] }) => {
               y: mesh.position.y,
               z: mesh.position.z,
             },
+            wordIndex: h,
+            charIndex: i,
           });
         });
         letterCount++;
@@ -323,7 +222,40 @@ const DropEffect3D = ({ history }: { history: string[] }) => {
     }
   }, [impulse?.ts, history]);
 
-  return <div ref={mountRef} style={{ width: 1200, height: 800 }} />;
+  // 바닥 위에 남아있는 글자 수, 사라진 글자 수 계산
+  const [onGroundCount, setOnGroundCount] = useState(0);
+  const [disappearedCount, setDisappearedCount] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setOnGroundCount(
+        lettersRef.current.filter(({ body }) => body.position.y > -9).length,
+      );
+      setDisappearedCount(window.__disappearedCount || 0);
+    }, 300);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div
+      style={{ position: "relative", width: 1200, height: 800 }}
+      ref={mountRef}
+    >
+      <div
+        style={{
+          position: "absolute",
+          left: 16,
+          top: 12,
+          color: "#fff",
+          fontWeight: 700,
+          fontSize: 20,
+          zIndex: 2,
+          textShadow: "0 1px 4px #222",
+        }}
+      >
+        바닥 위 글자 수: {onGroundCount} / 사라진 글자 수: {disappearedCount}
+      </div>
+    </div>
+  );
 };
 
 export default DropEffect3D;

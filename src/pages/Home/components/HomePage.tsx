@@ -27,7 +27,7 @@ export default function HomePage(): React.ReactNode {
             setHistory={setHistory}
           />
           <div className="mb-4 flex gap-2"></div>
-          <DropEffect3D history={[...history, currentText]} />
+          <DropEffect3D history={history} />
         </div>
       </section>
     </TypingImpulseProvider>

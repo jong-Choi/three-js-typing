@@ -53,7 +53,7 @@ export default function TypingPractice({
         setInput("");
         setCurrentIdx((idx) => idx + 1);
         setIsSolved(false);
-      }, 400);
+      }, 1000); // 1초 후
     }
   }, [input, currentText, isSolved, triggerImpulse, setCurrentIdx, setHistory]);
 

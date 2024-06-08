@@ -5,4 +5,6 @@ export type Letter = {
   mesh: THREE.Mesh;
   body: CANNON.Body;
   init: { x: number; y: number; z: number };
+  wordIndex?: number;
+  charIndex?: number;
 };
