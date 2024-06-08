@@ -7,11 +7,9 @@ const TYPING_TEXTS = ["TYPING", "REACT", "JAVASCRIPT", "HELLO", "OPENAI"];
 
 export default function HomePage(): React.ReactNode {
   const [currentIdx, setCurrentIdx] = useState(0);
-  const currentText = TYPING_TEXTS[currentIdx % TYPING_TEXTS.length];
+  const [history, setHistory] = useState<string[]>([]);
 
-  const handleComplete = () => {
-    setCurrentIdx((idx) => idx + 1);
-  };
+  const currentText = TYPING_TEXTS[currentIdx % TYPING_TEXTS.length];
 
   return (
     <TypingImpulseProvider>
@@ -26,9 +24,10 @@ export default function HomePage(): React.ReactNode {
           <TypingPractice
             currentText={currentText}
             setCurrentIdx={setCurrentIdx}
+            setHistory={setHistory}
           />
           <div className="mb-4 flex gap-2"></div>
-          <DropEffect3D text={currentText} />
+          <DropEffect3D history={[...history, currentText]} />
         </div>
       </section>
     </TypingImpulseProvider>

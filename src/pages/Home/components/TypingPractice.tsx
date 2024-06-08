@@ -4,11 +4,13 @@ import { useTypingImpulse } from "../context/hooks";
 interface TypingPracticeProps {
   currentText: string;
   setCurrentIdx: React.Dispatch<React.SetStateAction<number>>;
+  setHistory: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
 export default function TypingPractice({
   currentText,
   setCurrentIdx,
+  setHistory,
 }: TypingPracticeProps) {
   const [input, setInput] = useState("");
   const [isSolved, setIsSolved] = useState(false);
@@ -46,13 +48,14 @@ export default function TypingPractice({
     if (input === currentText && !isSolved) {
       setIsSolved(true);
       triggerImpulse({ type: "word", strength: 80, ts: Date.now() });
+      setHistory((prev) => [...prev, currentText]);
       setTimeout(() => {
         setInput("");
         setCurrentIdx((idx) => idx + 1);
         setIsSolved(false);
       }, 400);
     }
-  }, [input, currentText, isSolved, triggerImpulse, setCurrentIdx]);
+  }, [input, currentText, isSolved, triggerImpulse, setCurrentIdx, setHistory]);
 
   return (
     <div className="mb-2 flex flex-col items-center">
