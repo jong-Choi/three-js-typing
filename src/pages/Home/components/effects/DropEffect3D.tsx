@@ -4,6 +4,7 @@ import { FontLoader, TextGeometry, OrbitControls } from "three-stdlib";
 import * as CANNON from "cannon-es";
 import { COLORS, pick } from "../../utils/colorUtils";
 import { Letter } from "../../types/letter";
+import { useTypingImpulse } from "../../context/hooks";
 
 const FONT_URL =
   "https://cdn.jsdelivr.net/npm/three@0.150.1/examples/fonts/helvetiker_regular.typeface.json";
@@ -18,6 +19,7 @@ const DropEffect3D = ({ text = "TYPING" }: { text?: string }) => {
   const controlsRef = useRef<OrbitControls>();
   const dragState = useRef({ isDragging: false, start: { x: 0, y: 0 } });
   const isDraggingRef = useRef(false);
+  const { impulse } = useTypingImpulse();
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -260,6 +262,30 @@ const DropEffect3D = ({ text = "TYPING" }: { text?: string }) => {
       }
     };
   }, [mountRef, text]);
+
+  // 임펄스 트리거 감지 및 적용
+  useEffect(() => {
+    if (!impulse) return;
+    if (impulse.type === "letter" && lettersRef.current[impulse.index]) {
+      // 해당 글자에 impulse 적용
+      lettersRef.current[impulse.index].body.applyImpulse(
+        new CANNON.Vec3(0, 0, -impulse.strength),
+        new CANNON.Vec3(),
+      );
+    } else if (impulse.type === "word") {
+      // 전체 글자에 impulse 적용
+      lettersRef.current.forEach((l) => {
+        l.body.applyImpulse(
+          new CANNON.Vec3(
+            (Math.random() - 0.5) * impulse.strength,
+            Math.random() * impulse.strength,
+            -impulse.strength * (1 + Math.random()),
+          ),
+          new CANNON.Vec3(),
+        );
+      });
+    }
+  }, [impulse]);
 
   return <div ref={mountRef} style={{ width: 1200, height: 800 }} />;
 };

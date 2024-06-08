@@ -1,29 +1,56 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { useTypingImpulse } from "../context/hooks";
 
 interface TypingPracticeProps {
   currentText: string;
   onComplete: () => void;
+  setCurrentIdx: React.Dispatch<React.SetStateAction<number>>;
 }
 
 export default function TypingPractice({
   currentText,
   onComplete,
+  setCurrentIdx,
 }: TypingPracticeProps) {
   const [input, setInput] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const { triggerImpulse } = useTypingImpulse();
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, [currentText]);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.toUpperCase();
+    // 마지막 입력 글자 인덱스
+    const idx = value.length - 1;
+    if (idx >= 0) {
+      if (value[idx] === currentText[idx]) {
+        // 맞춘 글자: 강한 임펄스
+        triggerImpulse({
+          type: "letter",
+          index: idx,
+          strength: 30,
+          ts: Date.now(),
+        });
+      } else {
+        // 틀린 글자: 약한 임펄스
+        triggerImpulse({
+          type: "letter",
+          index: idx,
+          strength: 8,
+          ts: Date.now(),
+        });
+      }
+    }
+    setInput(value);
+  };
 
   useEffect(() => {
     if (input === currentText) {
+      // 전체 단어 맞춤: 모든 글자에 강한 임펄스
+      triggerImpulse({ type: "word", strength: 80, ts: Date.now() });
       setTimeout(() => {
         setInput("");
-        onComplete();
+        setCurrentIdx((idx) => idx + 1);
       }, 400);
     }
-  }, [input, currentText, onComplete]);
+  }, [input, currentText, triggerImpulse, setCurrentIdx]);
 
   return (
     <div className="mb-2 flex flex-col items-center">
@@ -42,10 +69,9 @@ export default function TypingPractice({
         ))}
       </div>
       <input
-        ref={inputRef}
         className="input input-bordered input-primary w-60 text-center font-mono"
         value={input}
-        onChange={(e) => setInput(e.target.value.toUpperCase())}
+        onChange={handleInputChange}
         maxLength={currentText.length}
         autoFocus
         spellCheck={false}
