@@ -61,13 +61,13 @@ const DropEffect3D = ({ text = "TYPING" }: { text?: string }) => {
     // 바닥
     const ground = new CANNON.Body({
       mass: 0,
-      shape: new CANNON.Box(new CANNON.Vec3(50, 0.5, 50)),
+      shape: new CANNON.Box(new CANNON.Vec3(100, 0.5, 100)),
       position: new CANNON.Vec3(0, -10, 0),
     });
     world.addBody(ground);
     groundRef.current = ground;
     const groundMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(100, 1, 100),
+      new THREE.BoxGeometry(200, 1, 200),
       new THREE.MeshPhongMaterial({ color: 0x353942 }),
     );
     groundMesh.position.y = -10;
@@ -275,11 +275,12 @@ const DropEffect3D = ({ text = "TYPING" }: { text?: string }) => {
     } else if (impulse.type === "word") {
       // 전체 글자에 impulse 적용
       lettersRef.current.forEach((l) => {
+        const s = Math.min(impulse.strength, 32);
         l.body.applyImpulse(
           new CANNON.Vec3(
-            (Math.random() - 0.5) * impulse.strength,
-            Math.random() * impulse.strength,
-            -impulse.strength * (1 + Math.random()),
+            (Math.random() - 0.5) * s,
+            Math.random() * s * 0.7,
+            -s * (0.7 + Math.random() * 0.8),
           ),
           new CANNON.Vec3(),
         );
