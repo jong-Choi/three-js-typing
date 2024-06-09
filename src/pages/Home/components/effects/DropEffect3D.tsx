@@ -228,7 +228,7 @@ const DropEffect3D = ({
       // 마지막 단어(현재 문제)의 해당 글자에만 임펄스 적용
       const lastWordLen = wordList[wordList.length - 1]?.length || 0;
       const startIdx = lettersRef.current.length - lastWordLen;
-      const target = lettersRef.current[startIdx + impulse.index];
+      const target = lettersRef.current[startIdx + (impulse.index || 0)];
       if (target) {
         target.body.applyImpulse(
           new CANNON.Vec3(0, 0, -(impulse.strength || 0)),
