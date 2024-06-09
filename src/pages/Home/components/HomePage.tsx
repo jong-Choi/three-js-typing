@@ -3,7 +3,17 @@ import DropEffect3D from "./effects/DropEffect3D";
 import TypingPractice from "./TypingPractice";
 import { useTypingImpulse } from "../context/hooks";
 
-const TYPING_TEXTS = ["TYPING", "REACT", "JAVASCRIPT", "HELLO", "OPENAI"];
+const TYPING_TEXTS = [
+  "AsyncAwait",
+  "EventLoop",
+  "PromiseHell",
+  "ClosureTrap",
+  "ThisBinding",
+  "CallbackStack",
+  "HoistingZone",
+  "ShadowDOM",
+  "FetchMachine",
+].sort(() => Math.random() - 0.5);
 
 export default function HomePage(): JSX.Element {
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -16,7 +26,7 @@ export default function HomePage(): JSX.Element {
   const currentText = TYPING_TEXTS[currentIdx % TYPING_TEXTS.length];
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isSolved) return; // 정답 입력 시 입력 금지
-    const value = e.target.value.toUpperCase();
+    const value = e.target.value;
     // 마지막 입력 글자 인덱스
     const idx = value.length - 1;
     if (idx >= 0) {

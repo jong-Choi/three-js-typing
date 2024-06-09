@@ -38,6 +38,13 @@ const DropEffect3D = ({
   );
 
   const geometryCache = useRef<{ [key: string]: TextGeometry }>({});
+  const materialCache = useRef<{ [key: string]: THREE.Material }>({
+    blue: new THREE.MeshPhongMaterial({ color: CORRECT_COLOR }),
+    gray: new THREE.MeshPhongMaterial({ color: DEFAULT_COLOR }),
+    red: new THREE.MeshPhongMaterial({ color: WRONG_COLOR }),
+  });
+  const [hoveredLetterIdx, setHoveredLetterIdx] = useState<number | null>(null);
+  const [isLetterPointerDown, setIsLetterPointerDown] = useState(false);
 
   // 최초 1회: 씬/월드/바닥/애니메이션 루프 생성
   useEffect(() => {
@@ -167,9 +174,7 @@ const DropEffect3D = ({
             geometryCache.current[geoKey] = geometry;
           }
 
-          const material = new THREE.MeshPhongMaterial({
-            color: DEFAULT_COLOR,
-          });
+          const material = materialCache.current.gray;
 
           const mesh = new THREE.Mesh(geometry, material);
           // 위치: 단어별로 y축을 다르게, x축은 단어 내에서만 오프셋
@@ -256,30 +261,27 @@ const DropEffect3D = ({
     const startIdx = lettersRef.current.length - lastWordLen;
     for (let i = 0; i < lastWordLen; i++) {
       const letter = lettersRef.current[startIdx + i];
-      if (letter && letter.mesh && letter.mesh.material) {
-        const material = letter.mesh.material as THREE.MeshPhongMaterial;
+      if (letter && letter.mesh) {
         if (input[i] === undefined) {
           // 입력 전
-          material.color.set(DEFAULT_COLOR);
+          letter.mesh.material = materialCache.current.gray;
         } else if (input[i] === lastWord[i]) {
           // 맞춘 글자
-          material.color.set(CORRECT_COLOR);
+          letter.mesh.material = materialCache.current.blue;
         } else {
           // 틀린 글자
-          material.color.set(WRONG_COLOR);
+          letter.mesh.material = materialCache.current.red;
         }
       }
-    }
-    // 이전 문제(바닥에 떨어진) 글자는 색상 고정(파란색)
+    } // 이전 문제(바닥에 떨어진) 글자는 색상 고정(파란색)
     if (wordList.length > 1) {
       let prevCount = 0;
       for (let h = 0; h < wordList.length - 1; h++) {
         const text = wordList[h];
         for (let i = 0; i < text.length; i++) {
           const letter = lettersRef.current[prevCount + i];
-          if (letter && letter.mesh && letter.mesh.material) {
-            const material = letter.mesh.material as THREE.MeshPhongMaterial;
-            material.color.set(CORRECT_COLOR);
+          if (letter && letter.mesh) {
+            letter.mesh.material = materialCache.current.blue;
           }
         }
         prevCount += text.length;
@@ -302,6 +304,101 @@ const DropEffect3D = ({
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    if (!groupRef.current || !controlsRef.current) return;
+    const group = groupRef.current;
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+
+    // Raycaster, mouse 좌표 준비
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    // 커서 스타일 관리
+    const setCursor = (cursor: string) => {
+      if (renderer.domElement.style.cursor !== cursor) {
+        renderer.domElement.style.cursor = cursor;
+      }
+    };
+
+    // OrbitControls 드래그 상태 추적
+    let isDragging = false;
+    const handleControlsStart = () => {
+      isDragging = true;
+      setCursor("grabbing");
+    };
+    const handleControlsEnd = () => {
+      isDragging = false;
+      setCursor("grab");
+    };
+    if (controlsRef.current) {
+      controlsRef.current.addEventListener("start", handleControlsStart);
+      controlsRef.current.addEventListener("end", handleControlsEnd);
+    }
+
+    // 마우스 move: hover 체크
+    const handlePointerMove = (event: MouseEvent) => {
+      if (!cameraRef.current) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, cameraRef.current);
+      const intersects = raycaster.intersectObjects(group.children, false);
+      if (intersects.length > 0) {
+        setHoveredLetterIdx(group.children.indexOf(intersects[0].object));
+        setCursor("pointer");
+      } else {
+        setHoveredLetterIdx(null);
+        if (isLetterPointerDown) {
+          setCursor("pointer");
+        } else if (isDragging) {
+          setCursor("grabbing");
+        } else {
+          setCursor("grab");
+        }
+      }
+    };
+
+    // 마우스 다운: 글자 클릭 시 impulse, OrbitControls 비활성화
+    const handlePointerDown = () => {
+      if (!controlsRef.current) return;
+      if (hoveredLetterIdx !== null) {
+        setIsLetterPointerDown(true);
+        controlsRef.current.enabled = false;
+        setCursor("pointer");
+        // impulse 적용
+        const letter = lettersRef.current[hoveredLetterIdx];
+        if (letter && letter.body) {
+          letter.body.applyImpulse(
+            new CANNON.Vec3(0, 0, -10),
+            new CANNON.Vec3(),
+          );
+        }
+      }
+    };
+    // 마우스 업: OrbitControls 다시 활성화
+    const handlePointerUp = () => {
+      if (!controlsRef.current) return;
+      setIsLetterPointerDown(false);
+      controlsRef.current.enabled = true;
+      setCursor("grab");
+    };
+
+    renderer.domElement.addEventListener("pointermove", handlePointerMove);
+    renderer.domElement.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("pointerup", handlePointerUp);
+    return () => {
+      renderer.domElement.removeEventListener("pointermove", handlePointerMove);
+      renderer.domElement.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("pointerup", handlePointerUp);
+      if (controlsRef.current) {
+        controlsRef.current.removeEventListener("start", handleControlsStart);
+        controlsRef.current.removeEventListener("end", handleControlsEnd);
+      }
+      setCursor("");
+    };
+  }, [hoveredLetterIdx, isLetterPointerDown]);
+
   return (
     <div
       style={{ position: "relative", width: 1200, height: 800 }}
@@ -322,6 +419,24 @@ const DropEffect3D = ({
         바닥 위 글자 수: {onGroundCount} / 사라진 글자 수: {disappearedCount}
         <br />
         캐싱된 글자 수: {cachedCount}
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          right: 20,
+          bottom: 16,
+          color: "#fff",
+          fontSize: 18,
+          opacity: 0.7,
+          textAlign: "right",
+          zIndex: 2,
+          pointerEvents: "none",
+          userSelect: "none",
+        }}
+      >
+        글자 클릭 : 상호작용
+        <br />
+        화면 드래그 : 시점 변경
       </div>
     </div>
   );
