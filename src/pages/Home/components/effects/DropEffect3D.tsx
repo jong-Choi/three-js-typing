@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import * as THREE from "three";
 import { FontLoader, TextGeometry, OrbitControls } from "three-stdlib";
 import * as CANNON from "cannon-es";
@@ -9,7 +9,13 @@ import { useTypingImpulse } from "../../context/hooks";
 const FONT_URL =
   "https://cdn.jsdelivr.net/npm/three@0.150.1/examples/fonts/helvetiker_regular.typeface.json";
 
-const DropEffect3D = ({ history }: { history: string[] }) => {
+const DropEffect3D = ({
+  history,
+  currentText,
+}: {
+  history: string[];
+  currentText: string;
+}) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const lettersRef = useRef<Letter[]>([]); // 누적된 모든 글자
   const worldRef = useRef<CANNON.World>();
@@ -21,6 +27,14 @@ const DropEffect3D = ({ history }: { history: string[] }) => {
   const rendererRef = useRef<THREE.WebGLRenderer>();
   const cameraRef = useRef<THREE.OrthographicCamera>();
   const { impulse } = useTypingImpulse();
+
+  const wordList = useMemo(
+    () => [...history, currentText],
+    [history, currentText],
+  );
+
+  const geometryCache = useRef<{ [key: string]: TextGeometry }>({});
+  const materialCache = useRef<{ [key: string]: THREE.Material }>({});
 
   // 최초 1회: 씬/월드/바닥/애니메이션 루프 생성
   useEffect(() => {
@@ -36,7 +50,7 @@ const DropEffect3D = ({ history }: { history: string[] }) => {
     scene.add(backLight);
     scene.background = new THREE.Color(0x353942);
     // 카메라
-    const camera = new THREE.OrthographicCamera(-40, 40, 30, -30, -10, 100);
+    const camera = new THREE.OrthographicCamera(-40, 40, 30, -30, -0.01, 2000);
     camera.position.set(-15, 15, 40);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
@@ -109,19 +123,19 @@ const DropEffect3D = ({ history }: { history: string[] }) => {
     };
   }, []);
 
-  // history가 바뀔 때마다 새 글자만 추가
+  // wordList가 바뀔 때마다 새 글자만 추가
   useEffect(() => {
     if (!sceneRef.current || !groupRef.current || !worldRef.current) return;
-    // history의 각 단어를 누적해서, 이미 추가된 글자 수보다 많은 경우만 추가
+    // wordList의 각 단어를 누적해서, 이미 추가된 글자 수보다 많은 경우만 추가
     let letterCount = lettersRef.current.length;
-    for (let h = 0; h < history.length; h++) {
-      const text = history[h];
+    for (let h = 0; h < wordList.length; h++) {
+      const text = wordList[h];
       for (let i = 0; i < text.length; i++) {
         if (
           letterCount >=
           (h === 0
             ? 0
-            : history.slice(0, h).reduce((a, t) => a + t.length, 0)) +
+            : wordList.slice(0, h).reduce((a, t) => a + t.length, 0)) +
             i +
             1
         )
@@ -142,12 +156,27 @@ const DropEffect3D = ({ history }: { history: string[] }) => {
           };
           const colorSet = pick(COLORS);
           const progress = i / (text.length - 1);
-          const material = new THREE.MeshPhongMaterial({
-            color: colorSet.from.clone().lerp(colorSet.to, progress),
-          });
-          const geometry = new TextGeometry(text[i], options);
-          geometry.computeBoundingBox();
-          geometry.center();
+          const geoKey = `${text[i]}_${options.size}_${options.height}_${options.bevelEnabled}`;
+          let geometry = geometryCache.current[geoKey];
+          if (!geometry) {
+            geometry = new TextGeometry(text[i], options);
+            geometry.computeBoundingBox();
+            geometry.center();
+            geometryCache.current[geoKey] = geometry;
+          }
+          // material 캐싱
+          const matKey =
+            colorSet.from.getHexString() +
+            colorSet.to.getHexString() +
+            progress;
+          let material = materialCache.current[matKey];
+          if (!material) {
+            material = new THREE.MeshPhongMaterial({
+              color: colorSet.from.clone().lerp(colorSet.to, progress),
+            });
+            materialCache.current[matKey] = material;
+          }
+
           const mesh = new THREE.Mesh(geometry, material);
           // 위치: 단어별로 y축을 다르게, x축은 단어 내에서만 오프셋
           const offsetX = -((text.length - 1) * 3 * 1.2) / 2;
@@ -190,26 +219,26 @@ const DropEffect3D = ({ history }: { history: string[] }) => {
         letterCount++;
       }
     }
-  }, [history]);
+  }, [wordList]);
 
   // 임펄스 트리거 감지 및 적용
   useEffect(() => {
     if (!impulse) return;
     if (impulse.type === "letter") {
       // 마지막 단어(현재 문제)의 해당 글자에만 임펄스 적용
-      const lastWordLen = history[history.length - 1]?.length || 0;
+      const lastWordLen = wordList[wordList.length - 1]?.length || 0;
       const startIdx = lettersRef.current.length - lastWordLen;
       const target = lettersRef.current[startIdx + impulse.index];
       if (target) {
         target.body.applyImpulse(
-          new CANNON.Vec3(0, 0, -impulse.strength),
+          new CANNON.Vec3(0, 0, -(impulse.strength || 0)),
           new CANNON.Vec3(),
         );
       }
     } else if (impulse.type === "word") {
       // 전체 글자에 impulse 적용 (너무 멀리 날아가지 않게 strength와 방향 조정)
       lettersRef.current.forEach((l) => {
-        const s = Math.min(impulse.strength, 32); // 최대 32로 약간 더 세게
+        const s = Math.min(impulse.strength || 0, 32); // 최대 32로 약간 더 세게
         l.body.applyImpulse(
           new CANNON.Vec3(
             (Math.random() - 0.5) * s, // x축
@@ -219,18 +248,21 @@ const DropEffect3D = ({ history }: { history: string[] }) => {
           new CANNON.Vec3(),
         );
       });
+      impulse.type = "letter";
     }
-  }, [impulse?.ts, history]);
+  }, [impulse, wordList]);
 
   // 바닥 위에 남아있는 글자 수, 사라진 글자 수 계산
   const [onGroundCount, setOnGroundCount] = useState(0);
   const [disappearedCount, setDisappearedCount] = useState(0);
+  const [cachedCount, setCachedCount] = useState(0);
   useEffect(() => {
     const interval = setInterval(() => {
       setOnGroundCount(
         lettersRef.current.filter(({ body }) => body.position.y > -9).length,
       );
       setDisappearedCount(window.__disappearedCount || 0);
+      setCachedCount(Object.keys(geometryCache.current).length);
     }, 300);
     return () => clearInterval(interval);
   }, []);
@@ -253,6 +285,8 @@ const DropEffect3D = ({ history }: { history: string[] }) => {
         }}
       >
         바닥 위 글자 수: {onGroundCount} / 사라진 글자 수: {disappearedCount}
+        <br />
+        캐싱된 글자 수: {cachedCount}
       </div>
     </div>
   );

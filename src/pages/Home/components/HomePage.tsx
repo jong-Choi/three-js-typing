@@ -14,7 +14,15 @@ export default function HomePage(): React.ReactNode {
   return (
     <TypingImpulseProvider>
       <section
-        style={{ minHeight: "100vh", width: "100vw", background: "#353942" }}
+        style={{
+          minHeight: "100vh",
+          width: "100vw",
+          background: "#222",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
       >
         <div
           className="flex flex-col items-center justify-center gap-y-5"
@@ -27,7 +35,7 @@ export default function HomePage(): React.ReactNode {
             setHistory={setHistory}
           />
           <div className="mb-4 flex gap-2"></div>
-          <DropEffect3D history={history} />
+          <DropEffect3D history={history} currentText={currentText} />
         </div>
       </section>
     </TypingImpulseProvider>

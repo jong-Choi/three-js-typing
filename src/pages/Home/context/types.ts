@@ -4,7 +4,9 @@ declare global {
   }
 }
 
-export type TypingImpulse =
-  | { type: "letter"; index: number; strength: number; ts: number }
-  | { type: "word"; strength: number; ts: number }
-  | null;
+export type TypingImpulse = {
+  type: "letter" | "word";
+  index: number;
+  strength?: number;
+  ts: number;
+} | null;
