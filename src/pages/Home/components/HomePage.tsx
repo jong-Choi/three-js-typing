@@ -85,7 +85,11 @@ export default function HomePage(): JSX.Element {
           margin: "0 auto 12px auto",
         }}
       >
-        <DropEffect3D history={history} currentText={currentText} />
+        <DropEffect3D
+          history={history}
+          currentText={currentText}
+          input={input}
+        />
       </div>
       <div
         style={{

@@ -2,19 +2,23 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import * as THREE from "three";
 import { FontLoader, TextGeometry, OrbitControls } from "three-stdlib";
 import * as CANNON from "cannon-es";
-import { COLORS, pick } from "../../utils/colorUtils";
 import { Letter } from "../../types/letter";
 import { useTypingImpulse } from "../../context/hooks";
 
 const FONT_URL =
   "https://cdn.jsdelivr.net/npm/three@0.150.1/examples/fonts/helvetiker_regular.typeface.json";
+const CORRECT_COLOR = "#4fc3f7";
+const WRONG_COLOR = "#f06292";
+const DEFAULT_COLOR = "#aaa";
 
 const DropEffect3D = ({
   history,
   currentText,
+  input,
 }: {
   history: string[];
   currentText: string;
+  input: string;
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const lettersRef = useRef<Letter[]>([]); // 누적된 모든 글자
@@ -34,7 +38,6 @@ const DropEffect3D = ({
   );
 
   const geometryCache = useRef<{ [key: string]: TextGeometry }>({});
-  const materialCache = useRef<{ [key: string]: THREE.Material }>({});
 
   // 최초 1회: 씬/월드/바닥/애니메이션 루프 생성
   useEffect(() => {
@@ -154,8 +157,7 @@ const DropEffect3D = ({
             bevelOffset: 0,
             bevelSegments: 10,
           };
-          const colorSet = pick(COLORS);
-          const progress = i / (text.length - 1);
+
           const geoKey = `${text[i]}_${options.size}_${options.height}_${options.bevelEnabled}`;
           let geometry = geometryCache.current[geoKey];
           if (!geometry) {
@@ -164,18 +166,10 @@ const DropEffect3D = ({
             geometry.center();
             geometryCache.current[geoKey] = geometry;
           }
-          // material 캐싱
-          const matKey =
-            colorSet.from.getHexString() +
-            colorSet.to.getHexString() +
-            progress;
-          let material = materialCache.current[matKey];
-          if (!material) {
-            material = new THREE.MeshPhongMaterial({
-              color: colorSet.from.clone().lerp(colorSet.to, progress),
-            });
-            materialCache.current[matKey] = material;
-          }
+
+          const material = new THREE.MeshPhongMaterial({
+            color: DEFAULT_COLOR,
+          });
 
           const mesh = new THREE.Mesh(geometry, material);
           // 위치: 단어별로 y축을 다르게, x축은 단어 내에서만 오프셋
@@ -251,6 +245,47 @@ const DropEffect3D = ({
       impulse.type = "letter";
     }
   }, [impulse, wordList]);
+
+  // input에 따라 3D 글자 색상 실시간 동기화 (현재 문제의 글자만)
+  useEffect(() => {
+    if (!sceneRef.current || !groupRef.current || !worldRef.current) return;
+    if (lettersRef.current.length === 0) return;
+    // 마지막 단어(현재 문제)의 글자 mesh들만 추출
+    const lastWord = currentText;
+    const lastWordLen = currentText.length;
+    const startIdx = lettersRef.current.length - lastWordLen;
+    for (let i = 0; i < lastWordLen; i++) {
+      const letter = lettersRef.current[startIdx + i];
+      if (letter && letter.mesh && letter.mesh.material) {
+        const material = letter.mesh.material as THREE.MeshPhongMaterial;
+        if (input[i] === undefined) {
+          // 입력 전
+          material.color.set(DEFAULT_COLOR);
+        } else if (input[i] === lastWord[i]) {
+          // 맞춘 글자
+          material.color.set(CORRECT_COLOR);
+        } else {
+          // 틀린 글자
+          material.color.set(WRONG_COLOR);
+        }
+      }
+    }
+    // 이전 문제(바닥에 떨어진) 글자는 색상 고정(파란색)
+    if (wordList.length > 1) {
+      let prevCount = 0;
+      for (let h = 0; h < wordList.length - 1; h++) {
+        const text = wordList[h];
+        for (let i = 0; i < text.length; i++) {
+          const letter = lettersRef.current[prevCount + i];
+          if (letter && letter.mesh && letter.mesh.material) {
+            const material = letter.mesh.material as THREE.MeshPhongMaterial;
+            material.color.set(CORRECT_COLOR);
+          }
+        }
+        prevCount += text.length;
+      }
+    }
+  }, [currentText, input, wordList]);
 
   // 바닥 위에 남아있는 글자 수, 사라진 글자 수 계산
   const [onGroundCount, setOnGroundCount] = useState(0);

@@ -60,6 +60,7 @@ export default function TypingPractice({
     triggerImpulse,
     setCurrentIdx,
     setHistory,
+    setInput,
   ]);
   return (
     <>
