@@ -109,6 +109,18 @@ const DropEffect3D = ({
         if (body.position.y < -100) {
           scene.remove(mesh);
           world.removeBody(body);
+          // 메모리 누수 방지: geometry/material dispose
+          if (mesh.geometry) mesh.geometry.dispose();
+          if (Array.isArray(mesh.material)) {
+            mesh.material.forEach((m) => {
+              if (m && typeof m.dispose === "function") m.dispose();
+            });
+          } else if (
+            mesh.material &&
+            typeof mesh.material.dispose === "function"
+          ) {
+            mesh.material.dispose();
+          }
           if (!window.__disappearedCount) {
             window.__disappearedCount = 0;
           }
