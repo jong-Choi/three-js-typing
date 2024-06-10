@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import * as THREE from "three";
-import { FontLoader, TextGeometry, OrbitControls } from "three-stdlib";
+import { FontLoader, TextGeometry, OrbitControls, Font } from "three-stdlib";
 import * as CANNON from "cannon-es";
 import { Letter } from "../../types/letter";
 import { useTypingImpulse } from "../../context/hooks";
@@ -43,6 +43,15 @@ const DropEffect3D = ({
     gray: new THREE.MeshPhongMaterial({ color: DEFAULT_COLOR }),
     red: new THREE.MeshPhongMaterial({ color: WRONG_COLOR }),
   });
+  const fontLoaderRef = useRef<FontLoader>();
+  const [font, setFont] = useState<Font | null>(null);
+
+  useEffect(() => {
+    fontLoaderRef.current = new FontLoader();
+    fontLoaderRef.current.load(FONT_URL, (loadedFont) => {
+      setFont(loadedFont);
+    });
+  }, []);
   const [hoveredLetterIdx, setHoveredLetterIdx] = useState<number | null>(null);
   const [isLetterPointerDown, setIsLetterPointerDown] = useState(false);
 
@@ -109,7 +118,7 @@ const DropEffect3D = ({
         if (body.position.y < -100) {
           scene.remove(mesh);
           world.removeBody(body);
-          // 메모리 누수 방지: geometry/material dispose
+          // dispose로 메모리 누수 방지
           if (mesh.geometry) mesh.geometry.dispose();
           if (Array.isArray(mesh.material)) {
             mesh.material.forEach((m) => {
@@ -133,23 +142,27 @@ const DropEffect3D = ({
         mesh.position.copy(body.position as unknown as THREE.Vector3);
         mesh.quaternion.copy(body.quaternion as unknown as THREE.Quaternion);
       });
-      renderer.render(scene, camera);
+      if (rendererRef.current && cameraRef.current)
+        rendererRef.current.render(scene, cameraRef.current);
       animationRef.current = requestAnimationFrame(animate);
     };
     animate();
     // 클린업
     return () => {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
-      renderer.dispose();
-      mountNode.removeChild(renderer.domElement);
+      if (rendererRef.current) {
+        rendererRef.current.dispose();
+        mountNode.removeChild(rendererRef.current.domElement);
+      }
     };
   }, []);
 
   // wordList가 바뀔 때마다 새 글자만 추가
   useEffect(() => {
     if (!sceneRef.current || !groupRef.current || !worldRef.current) return;
-    // wordList의 각 단어를 누적해서, 이미 추가된 글자 수보다 많은 경우만 추가
-    let letterCount = lettersRef.current.length;
+    if (!font) return; // 폰트가 로드된 후에만 mesh 생성
+    const letterCount = lettersRef.current.length;
+
     for (let h = 0; h < wordList.length; h++) {
       const text = wordList[h];
       for (let i = 0; i < text.length; i++) {
@@ -163,74 +176,71 @@ const DropEffect3D = ({
         )
           continue;
         // 새 글자만 추가
-        const fontLoader = new FontLoader();
-        fontLoader.load(FONT_URL, (font) => {
-          const options = {
-            font,
-            size: 3,
-            height: 0.4,
-            curveSegments: 24,
-            bevelEnabled: true,
-            bevelThickness: 0.9,
-            bevelSize: 0.3,
-            bevelOffset: 0,
-            bevelSegments: 10,
-          };
-
-          const geoKey = `${text[i]}_${options.size}_${options.height}_${options.bevelEnabled}`;
-          let geometry = geometryCache.current[geoKey];
-          if (!geometry) {
-            geometry = new TextGeometry(text[i], options);
-            geometry.computeBoundingBox();
-            geometry.center();
-            geometryCache.current[geoKey] = geometry;
-          }
-
-          const material = materialCache.current.gray;
-
-          const mesh = new THREE.Mesh(geometry, material);
-          // 위치: 단어별로 y축을 다르게, x축은 단어 내에서만 오프셋
-          const offsetX = -((text.length - 1) * 3 * 1.2) / 2;
-          mesh.position.set(offsetX + i * 3 * 1.2, 5 + h * 5, 0); // y축 h*5로 쌓임
-          const group = groupRef.current;
-          if (!group) return;
-          group.add(mesh);
-          // Cannon body
-          const box = geometry.boundingBox;
-          if (!box) return;
-          const sx = (box.max.x - box.min.x) / 2;
-          const sy = (box.max.y - box.min.y) / 2;
-          const sz = (box.max.z - box.min.z) / 2;
-          const shape = new CANNON.Box(new CANNON.Vec3(sx, sy, sz));
-          const body = new CANNON.Body({
-            mass: 1,
-            position: new CANNON.Vec3(
-              mesh.position.x,
-              mesh.position.y,
-              mesh.position.z,
-            ),
-            shape,
-            angularDamping: 0.99,
-          });
-          const world = worldRef.current;
-          if (!world) return;
-          world.addBody(body);
-          lettersRef.current.push({
-            mesh,
-            body,
-            init: {
-              x: mesh.position.x,
-              y: mesh.position.y,
-              z: mesh.position.z,
-            },
-            wordIndex: h,
-            charIndex: i,
-          });
+        const options = {
+          font,
+          size: 3,
+          height: 0.4,
+          curveSegments: 24,
+          bevelEnabled: true,
+          bevelThickness: 0.9,
+          bevelSize: 0.3,
+          bevelOffset: 0,
+          bevelSegments: 10,
+        };
+        // geometry 캐싱
+        const geoKey = `${text[i]}_${options.size}_${options.height}_${options.bevelEnabled}`;
+        let geometry = geometryCache.current[geoKey];
+        if (!geometry) {
+          geometry = new TextGeometry(text[i], options);
+          geometry.computeBoundingBox();
+          geometry.center();
+          geometryCache.current[geoKey] = geometry;
+        }
+        // material: 기본 회색
+        const material = materialCache.current.gray;
+        const mesh = new THREE.Mesh(geometry, material);
+        // 위치: 단어별로 y축을 다르게, x축은 단어 내에서만 오프셋
+        const offsetX = -((text.length - 1) * 3 * 1.2) / 2;
+        mesh.position.set(offsetX + i * 3 * 1.2, 5 + h * 5, 0); // y축 h*5로 쌓임
+        groupRef.current.add(mesh);
+        // Cannon body
+        const box = geometry.boundingBox;
+        if (!box) continue;
+        const sx = (box.max.x - box.min.x) / 2;
+        const sy = (box.max.y - box.min.y) / 2;
+        const sz = (box.max.z - box.min.z) / 2;
+        const shape = new CANNON.Box(new CANNON.Vec3(sx, sy, sz));
+        const body = new CANNON.Body({
+          mass: 1,
+          position: new CANNON.Vec3(
+            mesh.position.x,
+            mesh.position.y,
+            mesh.position.z,
+          ),
+          shape,
+          angularDamping: 0.99,
         });
-        letterCount++;
+        worldRef.current.addBody(body);
+        lettersRef.current.push({
+          mesh,
+          body,
+          init: {
+            x: mesh.position.x,
+            y: mesh.position.y,
+            z: mesh.position.z,
+          },
+          wordIndex: h,
+          charIndex: i,
+        });
+        // 상태 업데이트(글자 추가 시)
+        setOnGroundCount(
+          lettersRef.current.filter(({ body }) => body.position.y > -9).length,
+        );
+        setDisappearedCount(window.__disappearedCount || 0);
+        setCachedCount(Object.keys(geometryCache.current).length);
       }
     }
-  }, [wordList]);
+  }, [wordList, font]);
 
   // 임펄스 트리거 감지 및 적용
   useEffect(() => {
