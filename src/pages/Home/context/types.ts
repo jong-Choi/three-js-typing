@@ -5,7 +5,7 @@ declare global {
 }
 
 export type TypingImpulse = {
-  type: "letter" | "word";
+  type: "letter" | "word" | null;
   index?: number;
   strength?: number;
   ts: number;

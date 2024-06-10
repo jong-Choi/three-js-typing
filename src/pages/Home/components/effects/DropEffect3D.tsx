@@ -242,6 +242,64 @@ const DropEffect3D = ({
     }
   }, [wordList, font]);
 
+  useEffect(() => {
+    if (!sceneRef.current || !groupRef.current || !worldRef.current) return;
+    const scene = sceneRef.current;
+    const world = worldRef.current;
+    const renderer = rendererRef.current;
+    const camera = cameraRef.current;
+    if (!renderer || !camera) return;
+    let animationId: number;
+    const animate = () => {
+      world.step(1 / 60);
+      controlsRef.current?.update();
+      // 화면 밖으로 떨어진 글자 제거
+      let removed = false;
+      lettersRef.current = lettersRef.current.filter(({ mesh, body }) => {
+        if (body.position.y < -100) {
+          scene.remove(mesh);
+          world.removeBody(body);
+          if (mesh.geometry) mesh.geometry.dispose();
+          if (Array.isArray(mesh.material)) {
+            mesh.material.forEach((m) => {
+              if (m && typeof m.dispose === "function") m.dispose();
+            });
+          } else if (
+            mesh.material &&
+            typeof mesh.material.dispose === "function"
+          ) {
+            mesh.material.dispose();
+          }
+          window.__disappearedCount = (window.__disappearedCount || 0) + 1;
+          removed = true;
+          return false;
+        }
+        return true;
+      });
+      if (removed) {
+        setOnGroundCount(
+          lettersRef.current.filter(({ body }) => body.position.y > -9).length,
+        );
+        setDisappearedCount(window.__disappearedCount || 0);
+        setCachedCount(Object.keys(geometryCache.current).length);
+      }
+      lettersRef.current.forEach(({ mesh, body }) => {
+        mesh.position.copy(body.position as unknown as THREE.Vector3);
+        mesh.quaternion.copy(body.quaternion as unknown as THREE.Quaternion);
+      });
+      if (renderer && camera) renderer.render(scene, camera);
+      animationId = requestAnimationFrame(animate);
+    };
+    animate();
+    return () => {
+      if (animationId) cancelAnimationFrame(animationId);
+      if (renderer) {
+        renderer.dispose();
+        mountRef.current?.removeChild(renderer.domElement);
+      }
+    };
+  }, []);
+
   // 임펄스 트리거 감지 및 적용
   useEffect(() => {
     if (!impulse) return;
@@ -269,7 +327,7 @@ const DropEffect3D = ({
           new CANNON.Vec3(),
         );
       });
-      impulse.type = "letter";
+      impulse.type = null;
     }
   }, [impulse, wordList]);
 
@@ -315,16 +373,6 @@ const DropEffect3D = ({
   const [onGroundCount, setOnGroundCount] = useState(0);
   const [disappearedCount, setDisappearedCount] = useState(0);
   const [cachedCount, setCachedCount] = useState(0);
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setOnGroundCount(
-        lettersRef.current.filter(({ body }) => body.position.y > -9).length,
-      );
-      setDisappearedCount(window.__disappearedCount || 0);
-      setCachedCount(Object.keys(geometryCache.current).length);
-    }, 300);
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     if (!groupRef.current || !controlsRef.current) return;
