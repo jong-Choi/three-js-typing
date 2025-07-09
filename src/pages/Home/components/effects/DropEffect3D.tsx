@@ -446,7 +446,7 @@ const DropEffect3D = ({
           textShadow: "0 1px 4px #222",
         }}
       >
-        바닥 위 글자 수: {onGroundCount} / 사라진 글자 수: {disappearedCount}
+        바닥 위 글자 수: {onGroundCount} / 떨어진 글자 수: {disappearedCount}
         <br />
         캐싱된 글자 수: {cachedCount}
       </div>
