@@ -6,7 +6,7 @@ const LayoutHeader: FC = () => {
     <>
       <header>
         <nav className="flex justify-center bg-base-100">
-          <Logo logoName={"Three JS Tutorial"} />
+          <Logo logoName={"3D Typing Practice"} />
         </nav>
       </header>
     </>

@@ -32,11 +32,6 @@ const DropEffect3D = ({
   const cameraRef = useRef<THREE.OrthographicCamera>();
   const { impulse } = useTypingImpulse();
 
-  const wordList = useMemo(
-    () => [...history, currentText],
-    [history, currentText],
-  );
-
   const geometryCache = useRef<{ [key: string]: TextGeometry }>({});
   const materialCache = useRef<{ [key: string]: THREE.Material }>({
     blue: new THREE.MeshPhongMaterial({ color: CORRECT_COLOR }),
@@ -181,96 +176,97 @@ const DropEffect3D = ({
   // wordList가 바뀔 때마다 새 글자만 추가
   useEffect(() => {
     if (!sceneRef.current || !groupRef.current || !worldRef.current) return;
-    if (!font) return; // 폰트가 로드된 후에만 mesh 생성
-    const letterCount = lettersRef.current.length;
+    if (!font) return;
 
-    for (let h = 0; h < wordList.length; h++) {
-      const text = wordList[h];
-      for (let i = 0; i < text.length; i++) {
-        if (
-          letterCount >=
-          (h === 0
-            ? 0
-            : wordList.slice(0, h).reduce((a, t) => a + t.length, 0)) +
-            i +
-            1
-        )
-          continue;
-        // 새 글자만 추가
-        const options = {
-          font,
-          size: 3,
-          height: 0.4,
-          curveSegments: 24,
-          bevelEnabled: true,
-          bevelThickness: 0.9,
-          bevelSize: 0.3,
-          bevelOffset: 0,
-          bevelSegments: 10,
-        };
-        // geometry 캐싱
-        const geoKey = `${text[i]}_${options.size}_${options.height}_${options.bevelEnabled}`;
-        let geometry = geometryCache.current[geoKey];
-        if (!geometry) {
-          geometry = new TextGeometry(text[i], options);
-          geometry.computeBoundingBox();
-          geometry.center();
-          geometryCache.current[geoKey] = geometry;
-        }
-        // material: 기본 회색
-        const material = materialCache.current.gray;
-        const mesh = new THREE.Mesh(geometry, material);
-        // 위치: 단어별로 y축을 다르게, x축은 단어 내에서만 오프셋
-        const offsetX = -((text.length - 1) * 3 * 1.2) / 2;
-        mesh.position.set(offsetX + i * 3 * 1.2, 5 + h * 5, 0); // y축 h*5로 쌓임
-        groupRef.current.add(mesh);
-        // Cannon body
-        const box = geometry.boundingBox;
-        if (!box) continue;
-        const sx = (box.max.x - box.min.x) / 2;
-        const sy = (box.max.y - box.min.y) / 2;
-        const sz = (box.max.z - box.min.z) / 2;
-        const shape = new CANNON.Box(new CANNON.Vec3(sx, sy, sz));
-        const body = new CANNON.Body({
-          mass: 1,
-          position: new CANNON.Vec3(
-            mesh.position.x,
-            mesh.position.y,
-            mesh.position.z,
-          ),
-          shape,
-          angularDamping: 0.99,
-        });
-        worldRef.current.addBody(body);
-        lettersRef.current.push({
-          mesh,
-          body,
-          init: {
-            x: mesh.position.x,
-            y: mesh.position.y,
-            z: mesh.position.z,
-          },
-          wordIndex: h,
-          charIndex: i,
-        });
-        // 상태 업데이트(글자 추가 시)
-        setOnGroundCount(
-          lettersRef.current.filter(({ body }) => body.position.y > -9).length,
-        );
-        setDisappearedCount(window.__disappearedCount || 0);
-        setCachedCount(Object.keys(geometryCache.current).length);
+    const prevLetters = lettersRef.current.length;
+    const currentLen = currentText.length;
+
+    // 이미 currentText 글자가 생성되어 있으면 skip
+    if (prevLetters >= history.join("").length + currentLen) return;
+
+    const options = {
+      font,
+      size: 3,
+      height: 0.4,
+      curveSegments: 24,
+      bevelEnabled: true,
+      bevelThickness: 0.9,
+      bevelSize: 0.3,
+      bevelOffset: 0,
+      bevelSegments: 10,
+    };
+
+    for (let i = 0; i < currentLen; i++) {
+      const totalIndex = history.join("").length + i;
+      if (lettersRef.current[totalIndex]) continue;
+
+      const geoKey = `${currentText[i]}_${options.size}_${options.height}_${options.bevelEnabled}`;
+      let geometry = geometryCache.current[geoKey];
+      if (!geometry) {
+        geometry = new TextGeometry(currentText[i], options);
+        geometry.computeBoundingBox();
+        geometry.center();
+        geometryCache.current[geoKey] = geometry;
       }
+
+      const material = materialCache.current.gray;
+      const mesh = new THREE.Mesh(geometry, material);
+
+      const offsetX = -((currentLen - 1) * 3 * 1.2) / 2;
+      mesh.position.set(offsetX + i * 3 * 1.2, 5 + history.length * 5, 0);
+      groupRef.current.add(mesh);
+
+      const box = geometry.boundingBox;
+      if (!box) continue;
+      const sx = (box.max.x - box.min.x) / 2;
+      const sy = (box.max.y - box.min.y) / 2;
+      const sz = (box.max.z - box.min.z) / 2;
+      const shape = new CANNON.Box(new CANNON.Vec3(sx, sy, sz));
+
+      const body = new CANNON.Body({
+        mass: 1,
+        position: new CANNON.Vec3(
+          mesh.position.x,
+          mesh.position.y,
+          mesh.position.z,
+        ),
+        shape,
+        angularDamping: 0.99,
+      });
+
+      worldRef.current.addBody(body);
+
+      lettersRef.current.push({
+        mesh,
+        body,
+        init: {
+          x: mesh.position.x,
+          y: mesh.position.y,
+          z: mesh.position.z,
+        },
+        wordIndex: history.length, // currentText는 마지막 word로 간주
+        charIndex: i,
+      });
     }
-  }, [wordList, font]);
+
+    // 상태 업데이트
+    setOnGroundCount(
+      lettersRef.current.filter(({ body }) => body.position.y > -9).length,
+    );
+    setDisappearedCount(window.__disappearedCount || 0);
+    setCachedCount(Object.keys(geometryCache.current).length);
+  }, [currentText, font, history]);
 
   // 임펄스 트리거 감지 및 적용
   useEffect(() => {
     if (!impulse) return;
     if (impulse.type === "letter") {
-      // 마지막 단어(현재 문제)의 해당 글자에만 임펄스 적용
-      const lastWordLen = wordList[wordList.length - 1]?.length || 0;
-      const startIdx = lettersRef.current.length - lastWordLen;
-      const target = lettersRef.current[startIdx + (impulse.index || 0)];
+      // 현재 문제의 해당 글자에만 임펄스 적용
+      const currentWordLetters = lettersRef.current.filter(
+        (letter) =>
+          letter.wordIndex !== undefined && letter.wordIndex === history.length,
+      );
+      const target = currentWordLetters[impulse.index || 0];
       if (target) {
         target.body.applyImpulse(
           new CANNON.Vec3(0, 0, -(impulse.strength || 0)),
@@ -292,23 +288,26 @@ const DropEffect3D = ({
       });
       impulse.type = null;
     }
-  }, [impulse, wordList]);
+  }, [impulse, history.length]);
 
   // input에 따라 3D 글자 색상 실시간 동기화 (현재 문제의 글자만)
   useEffect(() => {
     if (!sceneRef.current || !groupRef.current || !worldRef.current) return;
     if (lettersRef.current.length === 0) return;
-    // 마지막 단어(현재 문제)의 글자 mesh들만 추출
-    const lastWord = currentText;
-    const lastWordLen = currentText.length;
-    const startIdx = lettersRef.current.length - lastWordLen;
-    for (let i = 0; i < lastWordLen; i++) {
-      const letter = lettersRef.current[startIdx + i];
+
+    // 현재 문제의 글자들만 필터링
+    const currentWordLetters = lettersRef.current.filter(
+      (letter) =>
+        letter.wordIndex !== undefined && letter.wordIndex === history.length,
+    );
+
+    // 현재 문제의 글자들 색상 변경
+    currentWordLetters.forEach((letter, i) => {
       if (letter && letter.mesh) {
         if (input[i] === undefined) {
           // 입력 전
           letter.mesh.material = materialCache.current.gray;
-        } else if (input[i] === lastWord[i]) {
+        } else if (input[i] === currentText[i]) {
           // 맞춘 글자
           letter.mesh.material = materialCache.current.blue;
         } else {
@@ -316,21 +315,19 @@ const DropEffect3D = ({
           letter.mesh.material = materialCache.current.red;
         }
       }
-    } // 이전 문제(바닥에 떨어진) 글자는 색상 고정(파란색)
-    if (wordList.length > 1) {
-      let prevCount = 0;
-      for (let h = 0; h < wordList.length - 1; h++) {
-        const text = wordList[h];
-        for (let i = 0; i < text.length; i++) {
-          const letter = lettersRef.current[prevCount + i];
-          if (letter && letter.mesh) {
-            letter.mesh.material = materialCache.current.blue;
-          }
-        }
-        prevCount += text.length;
+    });
+
+    // 이전 문제(바닥에 떨어진) 글자는 색상 고정(파란색)
+    const previousWordLetters = lettersRef.current.filter(
+      (letter) =>
+        letter.wordIndex !== undefined && letter.wordIndex < history.length,
+    );
+    previousWordLetters.forEach((letter) => {
+      if (letter && letter.mesh) {
+        letter.mesh.material = materialCache.current.blue;
       }
-    }
-  }, [currentText, input, wordList]);
+    });
+  }, [currentText, input, history.length]);
 
   // 바닥 위에 남아있는 글자 수, 사라진 글자 수 계산
   const [onGroundCount, setOnGroundCount] = useState(0);
