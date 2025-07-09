@@ -61,17 +61,19 @@ export default function HomePage(): JSX.Element {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "flex-start",
+        padding: "12px 0",
       }}
     >
       <div
         style={{
-          width: 1200,
-          maxWidth: "95vw",
-          margin: "24px auto 12px auto",
+          width: "100%",
+          maxWidth: "1000px",
+          margin: "0 auto 8px auto",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           gap: 8,
+          padding: "0 16px",
         }}
       >
         <TypingPractice
@@ -86,13 +88,14 @@ export default function HomePage(): JSX.Element {
       </div>
       <div
         style={{
-          width: 1200,
-          maxWidth: "95vw",
+          width: "100%",
+          maxWidth: "1000px",
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
           flex: "0 0 auto",
-          margin: "0 auto 12px auto",
+          margin: "0 auto 8px auto",
+          padding: "0 16px",
         }}
       >
         <DropEffect3D
@@ -103,16 +106,17 @@ export default function HomePage(): JSX.Element {
       </div>
       <div
         style={{
-          width: 1200,
-          maxWidth: "95vw",
+          width: "100%",
+          maxWidth: "1000px",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          margin: "0 auto 24px auto",
+          margin: "0 auto 16px auto",
+          padding: "0 16px",
         }}
       >
         <input
-          className="input input-bordered input-primary text-center font-mono"
+          className="input-bordered input-primary input text-center font-mono"
           value={input}
           onChange={handleInputChange}
           maxLength={currentText.length}

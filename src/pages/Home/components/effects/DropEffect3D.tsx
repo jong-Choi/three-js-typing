@@ -75,7 +75,7 @@ const DropEffect3D = ({
     cameraRef.current = camera;
     // 렌더러
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(1200, 800);
+    renderer.setSize(1000, 600);
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setClearColor("#353942");
     const mountNode = mountRef.current;
@@ -244,6 +244,7 @@ const DropEffect3D = ({
 
   useEffect(() => {
     if (!sceneRef.current || !groupRef.current || !worldRef.current) return;
+    const mountNode = mountRef.current;
     const scene = sceneRef.current;
     const world = worldRef.current;
     const renderer = rendererRef.current;
@@ -295,7 +296,9 @@ const DropEffect3D = ({
       if (animationId) cancelAnimationFrame(animationId);
       if (renderer) {
         renderer.dispose();
-        mountRef.current?.removeChild(renderer.domElement);
+        if (mountNode) {
+          mountNode.removeChild(renderer.domElement);
+        }
       }
     };
   }, []);
@@ -471,7 +474,7 @@ const DropEffect3D = ({
 
   return (
     <div
-      style={{ position: "relative", width: 1200, height: 800 }}
+      style={{ position: "relative", width: 1000, height: 600 }}
       ref={mountRef}
     >
       <div

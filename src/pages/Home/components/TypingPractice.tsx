@@ -66,13 +66,14 @@ export default function TypingPractice({
     <>
       <div
         style={{
-          width: 1200,
-          maxWidth: "95vw",
-          margin: "24px auto 12px auto",
+          width: "100%",
+          maxWidth: "1000px",
+          margin: "0 auto 8px auto",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           gap: 8,
+          padding: "0 16px",
         }}
       >
         <div
