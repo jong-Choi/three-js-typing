@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { FontLoader, TextGeometry, OrbitControls, Font } from "three-stdlib";
 import * as CANNON from "cannon-es";
