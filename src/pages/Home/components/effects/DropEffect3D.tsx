@@ -98,14 +98,18 @@ const DropEffect3D = ({
     // 바닥
     const ground = new CANNON.Body({
       mass: 0,
-      shape: new CANNON.Box(new CANNON.Vec3(200, 0.5, 200)), // 기존 100 → 200
+      shape: new CANNON.Box(new CANNON.Vec3(35, 0.5, 35)), // 기존 100 → 200
       position: new CANNON.Vec3(0, -10, 0),
     });
     world.addBody(ground);
     groundRef.current = ground;
     const groundMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(400, 1, 400), // 기존 200 → 400
-      new THREE.MeshPhongMaterial({ color: 0x353942 }),
+      new THREE.BoxGeometry(70, 1, 70), // 기존 200 → 400
+      new THREE.MeshPhongMaterial({
+        color: 0x353942,
+        transparent: true,
+        opacity: 0.8,
+      }),
     );
     groundMesh.position.y = -10;
     scene.add(groundMesh);
